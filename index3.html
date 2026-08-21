@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>شاتي v2</title>
+<title>شاتي v3</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial}
 body{background:#0b141a;height:100vh;display:flex;flex-direction:column}
@@ -33,14 +33,14 @@ body{background:#0b141a;height:100vh;display:flex;flex-direction:column}
 </style>
 </head>
 <body>
-  <div class="header"><div id="appTitle">شاتي v2</div><span onclick="addContact()" style="font-size:24px;cursor:pointer">+</span></div>
+  <div class="header"><div id="appTitle">شاتي v3</div><span onclick="addContact()" style="font-size:24px;cursor:pointer">+</span></div>
   <div class="tabs" id="tabs" style="display:none">
     <div class="tab active" onclick="showTab('chatListScreen')">الدردشات</div>
     <div class="tab" onclick="showTab('statusScreen')">الحالة</div>
   </div>
 
   <div id="loginScreen" class="screen active">
-    <h2>مرحبا في <span style="color:#00a884">شاتي v2</span></h2>
+    <h2>مرحبا في <span style="color:#00a884">شاتي v3</span></h2>
     <input type="text" id="myNameInput" placeholder="اكتب اسمك هنا" required><br>
     <input type="tel" id="myNumberInput" placeholder="اكتب رقمك هنا" required><br>
     <button onclick="saveProfile()">بدء الدردشة</button>
@@ -75,12 +75,13 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-localStorage.clear(); // نمسح اي بيانات قديمة اجباري
 
-let profile = {};
-let contacts = JSON.parse(localStorage.getItem('contacts_v2')) || [];
+let profile = JSON.parse(localStorage.getItem('profile_v3')) || {};
+let contacts = JSON.parse(localStorage.getItem('contacts_v3')) || [];
 let currentChat = 'عام';
-const IMGBB_KEY = '6b8bfa5617ae2be9c6c5e1e9b5e5e5e5';
+const IMGBB_KEY = '6b8bfa5617ae2be9c6c5e1e9b5e5e5e5'; // غيره بمفتاحك
+
+if(profile.name){showApp();}
 
 function showApp(){
   document.getElementById('loginScreen').classList.remove('active');
@@ -95,7 +96,7 @@ function saveProfile(){
   let number = document.getElementById('myNumberInput').value;
   if(name=="" || number==""){alert("لازم تكتب الاسم والرقم");return;}
   profile = {name, number, avatar:"https://i.pravatar.cc/150?u="+number};
-  localStorage.setItem('profile_v2', JSON.stringify(profile));
+  localStorage.setItem('profile_v3', JSON.stringify(profile));
   showApp();
 }
 
@@ -106,7 +107,7 @@ function showTab(id){
   event.target.classList.add('active');
 }
 
-function addContact(){let name = prompt("اسم الشخص:");if(name){contacts.push({name});localStorage.setItem('contacts_v2',JSON.stringify(contacts));loadContacts();}}
+function addContact(){let name = prompt("اسم الشخص:");if(name){contacts.push({name});localStorage.setItem('contacts_v3',JSON.stringify(contacts));loadContacts();}}
 function loadContacts(){document.getElementById('contactsList').innerHTML='';contacts.forEach(c=>{document.getElementById('contactsList').innerHTML+=`<div class="chat-item" onclick="openChat('${c.name}')"><img class="avatar" src="https://i.pravatar.cc/150?u=${c.name}"><div><b>${c.name}</b></div></div>`})}
 function openChat(p){currentChat = p;document.getElementById('chatListScreen').classList.remove('active');document.getElementById('chatScreen').classList.add('active');document.getElementById('appTitle').innerText = p;document.getElementById('chat').innerHTML='';listenMessages();}
 
@@ -115,15 +116,16 @@ function showMsg(msg){
   let number = msg.number || "";
   let avatar = msg.avatar || "https://i.pravatar.cc/150?u=guest";
   const isMe = from === profile.name;
-  const show = currentChat==='عام'? true : (msg.to===profile.name || from===profile.name);
+  const show = currentChat==='عام'? true : (msg.to===profile.name || from===profile.name || msg.to==='عام');
   if(!show) return;
   let content = msg.text || '';
   if(msg.image) content = `<img src="${msg.image}">` + content;
 
+  // التعديل المهم: حتى رسايلك هتظهر بالاسم والرقم
   document.getElementById('chat').innerHTML += `<div class="msg-row ${isMe?'me':''}">
     ${!isMe?`<img class="avatar-sm" src="${avatar}">`:''}
     <div class="msg ${isMe?'me':''}">
-      ${!isMe?`<div class="sender">${from}</div><div class="number">${number}</div>`:''}
+      <div class="sender">${from}</div><div class="number">${number}</div>
       ${content}
       <div class="footer">${msg.time} ${isMe?'✓✓':''}</div>
     </div>
@@ -131,7 +133,10 @@ function showMsg(msg){
   document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
 }
 
-function listenMessages(){db.ref('messages').on('child_added', (data)=>{showMsg(data.val());});}
+function listenMessages(){
+  db.ref('messages').off(); // نمسح القديم
+  db.ref('messages').on('child_added', (data)=>{showMsg(data.val());});
+}
 
 function sendMsg(){
   let input = document.getElementById('msgInput');
@@ -143,6 +148,7 @@ function sendMsg(){
 
 document.getElementById('fileInput').onchange = function(e){
   let file = e.target.files[0]; if(!file) return;
+  alert("جاري رفع الصورة...");
   let form = new FormData();
   form.append('image', file);
   form.append('key', IMGBB_KEY);
@@ -152,8 +158,8 @@ document.getElementById('fileInput').onchange = function(e){
     if(data.success){
       let url = data.data.url;
       db.ref('messages').push({from:profile.name,to:currentChat,image:url,text:'',number:profile.number,avatar:profile.avatar,time:new Date().toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})});
-    }else{alert("فشل رفع الصورة")}
+    }else{alert("فشل رفع الصورة: " + data.error.message)}
   }).catch(err=>alert("تأكد من النت"));
 }
 </script>
-</body></html> 
+</body></html>  
